@@ -7,7 +7,7 @@ CC      := gcc
 CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -g \
            -Icore -Iintent_engine -Ipvm -Imutation_engine \
            -Iidentity_layer -Iexecution_engine -Itransport \
-           -Inetwork -Itrust_layer
+           -Inetwork -Itrust_layer -Ireplay -Iobserver -Ibus
 
 TARGET  := lns_demo
 
@@ -21,6 +21,9 @@ SRCS := core/lns.c \
         transport/tcp.c \
         network/network.c \
         trust_layer/trust.c \
+        replay/replay.c \
+        observer/observer.c \
+        bus/bus.c \
         demo/main.c
 
 OBJS := $(SRCS:.c=.o)

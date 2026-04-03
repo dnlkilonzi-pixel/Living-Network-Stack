@@ -4,6 +4,8 @@
 #include "../intent_engine/intent.h"
 #include "../mutation_engine/mutation.h"
 #include "../identity_layer/identity.h"
+#include "../replay/replay.h"
+#include "../observer/observer.h"
 #include <stddef.h>
 
 #define MAX_NODES          8
@@ -77,5 +79,19 @@ void network_propagate_decisions(lns_network_t *net);
 
 /* Print topology and current state of all nodes */
 void network_print(const lns_network_t *net);
+
+/* ---------------------------------------------------------------------------
+ * Phase 3: attach optional instrumentation to the network
+ * ------------------------------------------------------------------------- */
+
+/* Attach a replay log.  When set, network_forward() and
+ * network_propagate_decisions() record events into it.
+ * Pass NULL to detach. */
+void network_set_replay(replay_log_t *log);
+
+/* Attach a system observer.  When set, hop / forward / propagation
+ * statistics are accumulated into it automatically.
+ * Pass NULL to detach. */
+void network_set_observer(obs_stats_t *obs);
 
 #endif /* NETWORK_H */

@@ -4,6 +4,16 @@
 #include <string.h>
 
 /* ---------------------------------------------------------------------------
+ * Optional Phase 3 instrumentation hooks (NULL = disabled)
+ * ------------------------------------------------------------------------- */
+
+static replay_log_t *g_replay   = NULL;
+static obs_stats_t  *g_observer = NULL;
+
+void network_set_replay(replay_log_t *log)   { g_replay   = log; }
+void network_set_observer(obs_stats_t  *obs) { g_observer = obs; }
+
+/* ---------------------------------------------------------------------------
  * Internal helpers
  * ------------------------------------------------------------------------- */
 
@@ -219,13 +229,28 @@ int network_forward(lns_network_t *net, int src_idx, int dst_idx,
         rc = pvm_execute(handle, data, len);
         pvm_unload(handle);
 
+        /* Phase 3: record this hop into replay log and observer */
+        if (g_replay) {
+            replay_record_hop(g_replay, node->label,
+                              hop + 1, path_len,
+                              intent, node->metrics, d);
+        }
+        if (g_observer) {
+            observer_record_hop(g_observer, d.use_udp, node->metrics);
+        }
+
         if (rc != 0) {
             fprintf(stderr, "[NETWORK] Send failed at hop %d\n", hop + 1);
+            if (g_observer) observer_record_forward(g_observer, 0);
             return -1;
         }
     }
 
     printf("\n[NETWORK] ===== Forward complete =====\n");
+    if (g_replay)   replay_record_forward(g_replay,
+                                          net->nodes[src_idx].label,
+                                          net->nodes[dst_idx].label, 1);
+    if (g_observer) observer_record_forward(g_observer, 1);
     return 0;
 }
 
@@ -260,12 +285,20 @@ void network_propagate_decisions(lns_network_t *net)
                dp.observed.packet_loss * 100.0f,
                dp.observed.latency_ms);
 
+        /* Phase 3: record propagation event */
+        if (g_replay) {
+            replay_record_propagate(g_replay,
+                                    from->label, to->label,
+                                    dp.decision, dp.observed);
+        }
+
         /* Inject into neighbour's log for future mutation influence */
         to->decision_log[to->decision_log_count % MAX_DECISION_LOG] = dp;
         to->decision_log_count++;
     }
 
     printf("[NETWORK] ===== Propagation complete =====\n");
+    if (g_observer) observer_record_propagation(g_observer);
 }
 
 void network_print(const lns_network_t *net)

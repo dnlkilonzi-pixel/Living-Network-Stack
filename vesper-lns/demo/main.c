@@ -7,6 +7,8 @@
  *   - Protocol Virtual Machine (UDP / TCP)
  *   - Identity-based routing
  *   - Execution engine (OP_PRINT, OP_SUM)
+ *   Phase 2: Multi-node, decision propagation, proto config, trust, dist. compute
+ *   Phase 3: Deterministic replay, global observer, real IPC message bus
  */
 
 #include "../core/lns.h"
@@ -16,6 +18,9 @@
 #include "../execution_engine/exec.h"
 #include "../network/network.h"
 #include "../trust_layer/trust.h"
+#include "../replay/replay.h"
+#include "../observer/observer.h"
+#include "../bus/bus.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -427,6 +432,221 @@ static void demo_distributed_compute(void)
     execute_packet_ctx(&pkt, &ctx, "node-C");
 }
 
+/* ==========================================================================
+ * PHASE 3 – System Becomes Real
+ * ======================================================================== */
+
+/* --------------------------------------------------------------------------
+ * Scenario 13 – Deterministic Replay Engine
+ *
+ * A 3-node network is set up, a replay log is attached, and a multi-hop
+ * forward is performed.  After the run:
+ *   1.  The full trace is dumped (human-readable event log).
+ *   2.  replay_run() re-executes every hop event with the same inputs and
+ *       verifies the output is identical – proving determinism.
+ * ------------------------------------------------------------------------ */
+static void demo_deterministic_replay(void)
+{
+    replay_log_t  log;
+    lns_network_t net;
+    int idx_a, idx_b, idx_c;
+    intent_t intent;
+    char payload[] = "Replay test payload";
+
+    banner("Scenario 13: Deterministic Replay Engine");
+
+    /* Seed 42 matches lns_init() – keeps simulate_metrics() reproducible */
+    replay_init(&log, 42u);
+    replay_start(&log);
+
+    network_init(&net);
+    network_set_replay(&log);
+
+    idx_a = network_add_node(&net, "replay-node-A",
+                             (net_metrics_t){45.0f,  0.02f, 70.0f});
+    idx_b = network_add_node(&net, "replay-node-B",
+                             (net_metrics_t){180.0f, 0.08f, 15.0f});
+    idx_c = network_add_node(&net, "replay-node-C",
+                             (net_metrics_t){60.0f,  0.18f,  8.0f});
+
+    network_add_edge(&net, idx_a, idx_b);
+    network_add_edge(&net, idx_b, idx_c);
+
+    intent.flags    = INTENT_HIGH_THROUGHPUT;
+    intent.priority = 6;
+    intent.ttl_ms   = 1500;
+
+    network_forward(&net, idx_a, idx_c, payload,
+                    sizeof(payload) - 1, intent);
+
+    /* Also record propagation events */
+    network_propagate_decisions(&net);
+
+    replay_stop(&log);
+
+    /* Step 1: dump the recorded trace */
+    replay_dump(&log, stdout);
+
+    /* Step 2: replay and verify determinism */
+    replay_run(&log);
+
+    /* Detach so subsequent demos are not affected */
+    network_set_replay(NULL);
+}
+
+/* --------------------------------------------------------------------------
+ * Scenario 14 – Global System Observer (network brain dashboard)
+ *
+ * Runs multiple forwards and a propagation round while the observer
+ * accumulates statistics, then prints the full dashboard.
+ * ------------------------------------------------------------------------ */
+static void demo_global_observer(void)
+{
+    obs_stats_t   obs;
+    lns_network_t net;
+    int idx_a, idx_b, idx_c;
+    intent_t intent;
+    char payload[] = "Observer test payload";
+    int run;
+
+    banner("Scenario 14: Global System Observer Dashboard");
+
+    observer_init(&obs);
+    network_init(&net);
+    network_set_observer(&obs);
+
+    /* Build a 3-node mesh with varied conditions */
+    idx_a = network_add_node(&net, "obs-node-A",
+                             (net_metrics_t){30.0f,  0.01f, 90.0f});
+    idx_b = network_add_node(&net, "obs-node-B",
+                             (net_metrics_t){210.0f, 0.12f, 12.0f});
+    idx_c = network_add_node(&net, "obs-node-C",
+                             (net_metrics_t){70.0f,  0.22f,  5.0f});
+
+    network_add_edge(&net, idx_a, idx_b);
+    network_add_edge(&net, idx_b, idx_c);
+    network_add_edge(&net, idx_a, idx_c); /* shortcut edge */
+
+    /* Run 4 forwards with different intents to generate varied statistics */
+    intent.ttl_ms   = 2000;
+    intent.priority = 5;
+
+    for (run = 0; run < 4; run++) {
+        intent.flags = (run % 2 == 0) ? INTENT_LOW_LATENCY
+                                      : INTENT_HIGH_THROUGHPUT;
+        network_forward(&net, idx_a, idx_c, payload,
+                        sizeof(payload) - 1, intent);
+    }
+
+    /* One high-security forward (will use TCP) */
+    intent.flags    = INTENT_HIGH_SECURITY;
+    intent.priority = 9;
+    network_forward(&net, idx_a, idx_b, payload,
+                    sizeof(payload) - 1, intent);
+
+    /* Propagation round */
+    network_propagate_decisions(&net);
+
+    /* Record some exec outcomes (simulated) */
+    observer_record_exec(&obs, 1);
+    observer_record_exec(&obs, 1);
+    observer_record_exec(&obs, 0);
+
+    /* Print the dashboard */
+    observer_report(&obs);
+
+    /* Detach */
+    network_set_observer(NULL);
+}
+
+/* --------------------------------------------------------------------------
+ * Scenario 15 – Real Message Bus (IPC via UNIX socketpair)
+ *
+ * Three virtual nodes are registered on the bus.  Real kernel-buffered
+ * datagrams are sent from node-A and node-B to node-C.  The messages are
+ * serialized into a binary wire format before entering the kernel socket
+ * layer and deserialized on receipt, demonstrating a real message bus layer.
+ * ------------------------------------------------------------------------ */
+static void demo_message_bus(void)
+{
+    bus_t      bus;
+    bus_msg_t  received;
+    char       data_a[]    = "Hello from node-A via real IPC!";
+    char       data_b[]    = "Metrics update from node-B";
+    /* Simulate a serialized net_metrics_t: 3 floats = 12 bytes */
+    float      metrics_buf[3] = {75.0f, 0.03f, 55.0f};
+
+    banner("Scenario 15: Real Message Bus (UNIX socketpair IPC)");
+
+    bus_init(&bus);
+
+    bus_register(&bus, "bus-node-A");
+    bus_register(&bus, "bus-node-B");
+    bus_register(&bus, "bus-node-C");
+
+    printf("\n[DEMO] node-A sends BUS_MSG_DATA to node-C:\n");
+    bus_send(&bus, "bus-node-A", "bus-node-C", BUS_MSG_DATA,
+             data_a, sizeof(data_a) - 1);
+
+    printf("\n[DEMO] node-B sends BUS_MSG_METRICS to node-C:\n");
+    bus_send(&bus, "bus-node-B", "bus-node-C", BUS_MSG_METRICS,
+             metrics_buf, sizeof(metrics_buf));
+
+    printf("\n[DEMO] node-B sends BUS_MSG_DATA to node-C:\n");
+    bus_send(&bus, "bus-node-B", "bus-node-C", BUS_MSG_DATA,
+             data_b, sizeof(data_b) - 1);
+
+    printf("\n[DEMO] node-A sends BUS_MSG_PING to node-C:\n");
+    bus_send(&bus, "bus-node-A", "bus-node-C", BUS_MSG_PING, NULL, 0);
+
+    printf("\n[DEMO] node-C receiving messages (100 ms timeout each):\n");
+
+    if (bus_recv(&bus, "bus-node-C", &received, 100) == 0) {
+        bus_msg_print(&received);
+    } else {
+        printf("[DEMO] node-C: recv #1 timed out\n");
+    }
+
+    if (bus_recv(&bus, "bus-node-C", &received, 100) == 0) {
+        bus_msg_print(&received);
+        /* Show the metrics payload interpreted as floats */
+        if (received.msg_type == BUS_MSG_METRICS &&
+            received.payload_len >= (uint32_t)(3 * sizeof(float))) {
+            float lat, loss, bw;
+            memcpy(&lat,  received.payload + 0, sizeof(float));
+            memcpy(&loss, received.payload + 4, sizeof(float));
+            memcpy(&bw,   received.payload + 8, sizeof(float));
+            printf("[BUS]   decoded: latency=%.1f ms  "
+                   "loss=%.1f%%  bw=%.1f Mbps\n",
+                   lat, loss * 100.0f, bw);
+        }
+    } else {
+        printf("[DEMO] node-C: recv #2 timed out\n");
+    }
+
+    if (bus_recv(&bus, "bus-node-C", &received, 100) == 0) {
+        bus_msg_print(&received);
+    } else {
+        printf("[DEMO] node-C: recv #3 timed out\n");
+    }
+
+    if (bus_recv(&bus, "bus-node-C", &received, 100) == 0) {
+        bus_msg_print(&received);
+    } else {
+        printf("[DEMO] node-C: recv #4 timed out\n");
+    }
+
+    /* Non-blocking recv on empty socket – should time out cleanly */
+    printf("\n[DEMO] node-C non-blocking recv on empty socket:\n");
+    if (bus_recv(&bus, "bus-node-C", &received, 0) == 0) {
+        bus_msg_print(&received);
+    } else {
+        printf("[BUS]   No message available (as expected)\n");
+    }
+
+    bus_shutdown(&bus);
+}
+
 /* --------------------------------------------------------------------------
  * Entry point
  * ------------------------------------------------------------------------ */
@@ -435,7 +655,7 @@ int main(void)
     printf("\n");
     printf("************************************************************\n");
     printf("*        Living Network Stack (LNS) – Demo Program         *\n");
-    printf("*            Phase 1 + Phase 2 Scenarios                   *\n");
+    printf("*         Phase 1 + Phase 2 + Phase 3 Scenarios            *\n");
     printf("************************************************************\n");
 
     lns_init();
@@ -455,6 +675,11 @@ int main(void)
     demo_proto_config_evolution();
     demo_trust_routing();
     demo_distributed_compute();
+
+    /* --- Phase 3 --------------------------------------------------------- */
+    demo_deterministic_replay();
+    demo_global_observer();
+    demo_message_bus();
 
     lns_shutdown();
 
