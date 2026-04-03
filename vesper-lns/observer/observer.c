@@ -1,11 +1,27 @@
+/* _POSIX_C_SOURCE required for clock_gettime / struct timespec */
+#define _POSIX_C_SOURCE 200112L
+
 #include "observer.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+
+/* ---------------------------------------------------------------------------
+ * Internal helper: monotonic millisecond timestamp
+ * ------------------------------------------------------------------------- */
+
+static int64_t now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + (int64_t)(ts.tv_nsec / 1000000);
+}
 
 void observer_init(obs_stats_t *obs)
 {
     memset(obs, 0, sizeof(*obs));
-    obs->last_protocol = -1;
+    obs->last_protocol       = -1;
+    obs->convergence_start_ms = -1;
     printf("[OBSERVER] Counters reset\n");
 }
 
@@ -19,13 +35,23 @@ void observer_record_hop(obs_stats_t *obs, int use_udp,
     if (use_udp) obs->udp_hops++;
     else         obs->tcp_hops++;
 
-    /* Track protocol switches and convergence streak */
+    /* Track protocol switches, convergence streak, and convergence timing */
     prev = obs->last_protocol;
     if (prev != -1 && prev != use_udp) {
         obs->protocol_switches++;
         obs->current_streak = 1;
+        /* Protocol switched: start timing a new convergence window */
+        obs->convergence_start_ms = now_ms();
     } else {
         obs->current_streak++;
+        /* Check if we just reached the convergence threshold */
+        if (obs->current_streak == OBSERVER_CONVERGENCE_STREAK &&
+                obs->convergence_start_ms >= 0) {
+            obs->convergence_time_ms +=
+                (uint64_t)(now_ms() - obs->convergence_start_ms);
+            obs->convergence_count++;
+            obs->convergence_start_ms = -1; /* stop timing until next switch */
+        }
     }
     if (obs->current_streak > obs->best_streak) {
         obs->best_streak = obs->current_streak;
@@ -103,6 +129,14 @@ void observer_report(const obs_stats_t *obs)
     printf("\n");
     printf("  Convergence\n");
     printf("    Propagation rounds    : %u\n",  obs->propagation_rounds);
+    printf("    Convergence events    : %u\n",  obs->convergence_count);
+    if (obs->convergence_count > 0) {
+        printf("    Avg convergence time  : %llu ms\n",
+               (unsigned long long)(obs->convergence_time_ms
+                                    / obs->convergence_count));
+    } else {
+        printf("    Avg convergence time  : n/a\n");
+    }
     printf("    Current streak        : %u hops on same protocol\n",
            obs->current_streak);
     printf("\n");

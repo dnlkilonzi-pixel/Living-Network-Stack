@@ -95,6 +95,11 @@ void replay_record_propagate(replay_log_t *log, const char *from,
 /* Dump the full trace in human-readable form to fp */
 void replay_dump(const replay_log_t *log, FILE *fp);
 
+/* Write the full trace as NDJSON to the file at path.
+ * Each event is one JSON-object line (machine-parseable).
+ * Returns 0 on success, -1 on failure. */
+int replay_dump_file(const replay_log_t *log, const char *path);
+
 /* Re-execute the log: sets srand(log->seed), then for each HOP event
  * re-calls resolve_intent() + mutate() with the stored inputs, verifying
  * the result matches the recorded decision.  Proves determinism. */

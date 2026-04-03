@@ -161,6 +161,72 @@ void replay_dump(const replay_log_t *log, FILE *fp)
     fprintf(fp, "[REPLAY] ===== End of trace =====\n\n");
 }
 
+int replay_dump_file(const replay_log_t *log, const char *path)
+{
+    FILE *fp;
+    int   i;
+
+    if (!log || !path) return -1;
+
+    fp = fopen(path, "w");
+    if (!fp) {
+        fprintf(stderr, "[REPLAY] Failed to open log file: %s\n", path);
+        return -1;
+    }
+
+    for (i = 0; i < log->count; i++) {
+        const replay_event_t *ev = &log->events[i];
+
+        switch (ev->type) {
+        case REPLAY_HOP:
+            fprintf(fp,
+                    "{\"seq\":%u,\"type\":\"HOP\",\"node\":\"%s\","
+                    "\"hop\":%d,\"total\":%d,"
+                    "\"intent_flags\":%u,"
+                    "\"latency\":%.3f,\"loss\":%.6f,\"bw\":%.3f,"
+                    "\"proto\":\"%s\",\"enc\":%s,\"retries\":%d}\n",
+                    ev->seq, ev->node,
+                    ev->data.hop.hop_num, ev->data.hop.total_hops,
+                    ev->data.hop.intent.flags,
+                    ev->data.hop.metrics.latency_ms,
+                    ev->data.hop.metrics.packet_loss,
+                    ev->data.hop.metrics.bandwidth_mbps,
+                    ev->data.hop.decision.use_udp ? "UDP" : "TCP",
+                    ev->data.hop.decision.use_encryption ? "true" : "false",
+                    ev->data.hop.decision.retry_count);
+            break;
+
+        case REPLAY_FORWARD:
+            fprintf(fp,
+                    "{\"seq\":%u,\"type\":\"FORWARD\",\"src\":\"%s\","
+                    "\"dst\":\"%s\",\"success\":%s}\n",
+                    ev->seq, ev->node,
+                    ev->data.forward.dst,
+                    ev->data.forward.success ? "true" : "false");
+            break;
+
+        case REPLAY_PROPAGATE:
+            fprintf(fp,
+                    "{\"seq\":%u,\"type\":\"PROPAGATE\","
+                    "\"from\":\"%s\",\"to\":\"%s\","
+                    "\"proto\":\"%s\",\"loss\":%.6f,\"latency\":%.3f}\n",
+                    ev->seq,
+                    ev->data.propagate.from, ev->data.propagate.to,
+                    ev->data.propagate.decision.use_udp ? "UDP" : "TCP",
+                    ev->data.propagate.observed.packet_loss,
+                    ev->data.propagate.observed.latency_ms);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    fclose(fp);
+    printf("[REPLAY] Log written to: %s  (%d events)\n", path, log->count);
+    return 0;
+}
+
 void replay_run(const replay_log_t *log)
 {
     int mismatches = 0;

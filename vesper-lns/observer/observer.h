@@ -36,7 +36,15 @@ typedef struct {
     /* Execution engine */
     uint32_t exec_success;
     uint32_t exec_failure;
+    /* Convergence timing (wall-clock, CLOCK_MONOTONIC milliseconds) */
+    uint32_t convergence_count;       /* how many times the network re-converged */
+    uint64_t convergence_time_ms;     /* total accumulated convergence time (ms) */
+    int64_t  convergence_start_ms;    /* -1 = not timing; >=0 = epoch of last switch */
+
 } obs_stats_t;
+
+/* Number of consecutive same-protocol hops that signals convergence */
+#define OBSERVER_CONVERGENCE_STREAK  3
 
 /* Reset all counters (call before a test run) */
 void observer_init(obs_stats_t *obs);
