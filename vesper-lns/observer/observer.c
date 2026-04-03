@@ -150,3 +150,74 @@ void observer_report(const obs_stats_t *obs)
     printf("    Exec failures         : %u\n",  obs->exec_failure);
     printf("============================================================\n\n");
 }
+
+/* ---------------------------------------------------------------------------
+ * Observability Query Language
+ * ------------------------------------------------------------------------- */
+
+void observer_query(const replay_log_t *log,
+                    const obs_query_t  *query,
+                    obs_query_result_t *result)
+{
+    int i;
+    float sum_latency = 0.0f, sum_loss = 0.0f, sum_bw = 0.0f;
+
+    if (!result) return;
+    memset(result, 0, sizeof(*result));
+    if (!log || !query) return;
+
+    for (i = 0; i < log->count; i++) {
+        const replay_event_t *ev = &log->events[i];
+        int hop_num, use_udp;
+
+        if (ev->type != REPLAY_HOP) continue;
+
+        hop_num = ev->data.hop.hop_num;
+        use_udp = ev->data.hop.decision.use_udp;
+
+        /* Protocol filter */
+        if (query->filter_proto != OBS_PROTO_ANY &&
+            use_udp != query->filter_proto) continue;
+
+        /* Node filter */
+        if (query->filter_node[0] != '\0' &&
+            strncmp(ev->node, query->filter_node,
+                    sizeof(ev->node)) != 0) continue;
+
+        /* Hop-number range filter */
+        if (query->hop_min > 0 && hop_num < query->hop_min) continue;
+        if (query->hop_max > 0 && hop_num > query->hop_max) continue;
+
+        /* Accumulate */
+        result->matched_hops++;
+        sum_latency += ev->data.hop.metrics.latency_ms;
+        sum_loss    += ev->data.hop.metrics.packet_loss;
+        sum_bw      += ev->data.hop.metrics.bandwidth_mbps;
+
+        if (use_udp) result->udp_count++;
+        else         result->tcp_count++;
+
+        if (ev->causal_parent_seq != REPLAY_NO_PARENT)
+            result->causal_hop_count++;
+    }
+
+    if (result->matched_hops > 0) {
+        result->avg_latency_ms     = sum_latency / (float)result->matched_hops;
+        result->avg_loss           = sum_loss    / (float)result->matched_hops;
+        result->avg_bandwidth_mbps = sum_bw      / (float)result->matched_hops;
+    }
+}
+
+void observer_query_print(const obs_query_result_t *result)
+{
+    if (!result) return;
+
+    printf("[QUERY] Matched hops       : %u\n",      result->matched_hops);
+    printf("[QUERY]   UDP              : %u\n",      result->udp_count);
+    printf("[QUERY]   TCP              : %u\n",      result->tcp_count);
+    printf("[QUERY]   With causal root : %u\n",      result->causal_hop_count);
+    printf("[QUERY] Avg latency        : %.1f ms\n", result->avg_latency_ms);
+    printf("[QUERY] Avg loss           : %.1f%%\n",  result->avg_loss * 100.0f);
+    printf("[QUERY] Avg bandwidth      : %.1f Mbps\n",
+           result->avg_bandwidth_mbps);
+}

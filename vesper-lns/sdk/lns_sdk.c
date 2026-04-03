@@ -4,6 +4,7 @@
 
 #include "lns_sdk.h"
 #include "../identity_layer/identity.h"
+#include "../rng/rng.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -37,7 +38,7 @@ lns_session_t *lns_session_create(unsigned int seed)
     }
 
     s->seed = seed;
-    srand(seed);
+    rng_seed((uint64_t)seed);
 
     network_init(&s->net);
     identity_init();

@@ -3,6 +3,7 @@
 #include "../mutation_engine/mutation.h"
 #include "../pvm/pvm.h"
 #include "../execution_engine/exec.h"
+#include "../rng/rng.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -38,7 +39,7 @@ void lns_init(void)
     if (lns_ready) return;
 
     printf("[LNS] Runtime initialising...\n");
-    srand(42);   /* deterministic metrics simulation in demo */
+    rng_seed(42);   /* deterministic metrics simulation in demo */
     lns_ready = 1;
     printf("[LNS] Runtime ready\n");
 }

@@ -65,4 +65,53 @@ void observer_record_exec(obs_stats_t *obs, int success);
 /* Print the global system observer dashboard */
 void observer_report(const obs_stats_t *obs);
 
+/* ---------------------------------------------------------------------------
+ * Observability Query Language
+ *
+ * A simple predicate-based query engine that scans a replay_log_t (the
+ * machine-readable event stream) and computes aggregated metrics matching
+ * the supplied filter criteria.
+ *
+ * Example usage:
+ *   obs_query_t  q  = { .filter_proto = 1 };   // UDP only
+ *   obs_query_result_t r;
+ *   observer_query(&session->replay, &q, &r);
+ *   printf("UDP hops: %u  avg_latency: %.1f ms\n",
+ *          r.matched_hops, r.avg_latency_ms);
+ * ------------------------------------------------------------------------- */
+
+/* Include replay for replay_log_t */
+#include "../replay/replay.h"
+
+/* Filter protocol values */
+#define OBS_PROTO_ANY  (-1)   /* no protocol filter */
+#define OBS_PROTO_TCP   (0)
+#define OBS_PROTO_UDP   (1)
+
+typedef struct {
+    int  filter_proto;      /* OBS_PROTO_ANY / OBS_PROTO_TCP / OBS_PROTO_UDP */
+    char filter_node[32];   /* empty string = match all nodes */
+    int  hop_min;           /* 0 = no lower bound on hop number */
+    int  hop_max;           /* 0 = no upper bound on hop number */
+} obs_query_t;
+
+typedef struct {
+    uint32_t matched_hops;      /* number of HOP events matched             */
+    float    avg_latency_ms;    /* average observed latency (ms)             */
+    float    avg_loss;          /* average packet loss ratio [0, 1]          */
+    float    avg_bandwidth_mbps;/* average bandwidth (Mbps)                  */
+    uint32_t udp_count;         /* matched hops that used UDP                */
+    uint32_t tcp_count;         /* matched hops that used TCP                */
+    uint32_t causal_hop_count;  /* matched hops with a non-root causal parent*/
+} obs_query_result_t;
+
+/* Scan replay log events and fill result according to query predicates.
+ * result is zeroed before scanning; always safe to call with an empty log. */
+void observer_query(const replay_log_t *log,
+                    const obs_query_t  *query,
+                    obs_query_result_t *result);
+
+/* Pretty-print a query result */
+void observer_query_print(const obs_query_result_t *result);
+
 #endif /* OBSERVER_H */

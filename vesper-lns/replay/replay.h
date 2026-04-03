@@ -8,6 +8,14 @@
 
 #define REPLAY_MAX_EVENTS  512
 
+/* Number of distinct nodes tracked by the vector clock.
+ * Must match MAX_NODES in network.h; kept separate to avoid a circular
+ * include between replay/ and network/. */
+#define REPLAY_MAX_NODES   8
+
+/* Sentinel: causal_parent_seq == REPLAY_NO_PARENT means no causal parent */
+#define REPLAY_NO_PARENT   UINT32_MAX
+
 /* ---------------------------------------------------------------------------
  * Event types
  * ------------------------------------------------------------------------- */
@@ -21,16 +29,22 @@ typedef enum {
 /* ---------------------------------------------------------------------------
  * A single recorded event
  *
- * The union stores the minimal inputs needed to re-execute deterministically:
- *   - HOP:       intent + metrics → sufficient to call resolve_intent()+mutate()
- *   - FORWARD:   source/dest labels and success flag
- *   - PROPAGATE: source/dest labels and the decision + observed metrics
+ * causal_parent_seq — seq of the most recent PROPAGATE event that caused
+ *   a decision change at this node, or REPLAY_NO_PARENT if this hop's
+ *   decision arose purely from local metrics.
+ *
+ * vc[] — snapshot of the vector clock at the moment this event fired.
+ *   vc[i] is the logical-time of node i (by insertion order in the log).
  * ------------------------------------------------------------------------- */
 
 typedef struct {
     replay_event_type_t type;
-    uint32_t            seq;         /* monotonic event counter */
-    char                node[32];    /* originating node label */
+    uint32_t            seq;                      /* monotonic event counter */
+    char                node[32];                 /* originating node label  */
+
+    /* Causal model */
+    uint32_t            causal_parent_seq;        /* REPLAY_NO_PARENT = root */
+    uint32_t            vc[REPLAY_MAX_NODES];     /* vector clock snapshot   */
 
     union {
         /* REPLAY_HOP */
@@ -65,11 +79,19 @@ typedef struct {
 typedef struct {
     replay_event_t events[REPLAY_MAX_EVENTS];
     int            count;
-    unsigned int   seed;     /* srand() seed active during recording */
-    int            active;   /* 1 = currently recording */
+    unsigned int   seed;      /* srand()-compatible seed (legacy) */
+    int            active;    /* 1 = currently recording */
+
+    /* Centralized RNG state (xorshift64) snapshotted at replay_start() */
+    uint64_t       rng_state;
+
+    /* Per-node vector clocks (indexed by label insertion order) */
+    uint32_t       node_vc[REPLAY_MAX_NODES];
+    char           vc_labels[REPLAY_MAX_NODES][32];
+    int            vc_node_count;
 } replay_log_t;
 
-/* Initialise an empty log with the given seed (must match srand() in use) */
+/* Initialise an empty log with the given seed (must match rng_seed() in use) */
 void replay_init(replay_log_t *log, unsigned int seed);
 
 /* Start / stop recording */
@@ -92,6 +114,11 @@ void replay_record_propagate(replay_log_t *log, const char *from,
                              decision_t decision,
                              net_metrics_t observed);
 
+/* Causal query: return the event that caused event[seq], or NULL if root.
+ * Walks causal_parent_seq chain back one step. */
+const replay_event_t *replay_find_cause(const replay_log_t *log,
+                                        uint32_t seq);
+
 /* Dump the full trace in human-readable form to fp */
 void replay_dump(const replay_log_t *log, FILE *fp);
 
@@ -100,7 +127,7 @@ void replay_dump(const replay_log_t *log, FILE *fp);
  * Returns 0 on success, -1 on failure. */
 int replay_dump_file(const replay_log_t *log, const char *path);
 
-/* Re-execute the log: sets srand(log->seed), then for each HOP event
+/* Re-execute the log: restores the RNG state, then for each HOP event
  * re-calls resolve_intent() + mutate() with the stored inputs, verifying
  * the result matches the recorded decision.  Proves determinism. */
 void replay_run(const replay_log_t *log);

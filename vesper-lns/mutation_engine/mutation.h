@@ -2,6 +2,7 @@
 #define MUTATION_H
 
 #include "../intent_engine/intent.h"
+#include <stddef.h>
 
 /* Network condition metrics sampled at runtime */
 typedef struct {
@@ -41,5 +42,31 @@ void mutate_proto_config(proto_config_t *cfg, net_metrics_t metrics);
 
 /* Pretty-print a proto_config_t */
 void proto_config_print(const proto_config_t *cfg);
+
+/* ---------------------------------------------------------------------------
+ * Backpressure / Network Stress Model
+ *
+ * Tracks per-node queue depth and jitter so that sustained high-rate sending
+ * raises latency and loss proportionally to congestion — replacing the
+ * previous "perfect network with logging" behaviour.
+ * ------------------------------------------------------------------------- */
+
+/* Maximum queue depth modelled per node (bytes) */
+#define STRESS_MAX_QUEUE_BYTES  (1024 * 1024)  /* 1 MB soft cap */
+
+typedef struct {
+    float queue_bytes;  /* currently queued / in-flight bytes */
+    float jitter_ms;    /* smoothed one-way jitter (ms) */
+} stress_state_t;
+
+/* Reset a stress state (call once after node creation) */
+void stress_init(stress_state_t *s);
+
+/* Update stress state after sending bytes_sent over elapsed_ms at bw_mbps.
+ * Derives congestion-aware metrics (latency / loss / effective bandwidth)
+ * from base and returns them.  base itself is NOT modified. */
+net_metrics_t stress_update(stress_state_t *s, size_t bytes_sent,
+                             float bw_mbps, float elapsed_ms,
+                             net_metrics_t base);
 
 #endif /* MUTATION_H */

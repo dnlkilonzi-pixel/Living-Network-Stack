@@ -140,6 +140,7 @@ int network_add_node(lns_network_t *net, const char *label,
     strncpy(n->label, label, sizeof(n->label) - 1);
     n->metrics = metrics;
     n->id      = node_id_from_label(label);
+    stress_init(&n->stress);
 
     printf("[NETWORK] Added node[%d]: \"%s\"\n", idx, n->label);
     return idx;
@@ -199,12 +200,19 @@ int network_forward(lns_network_t *net, int src_idx, int dst_idx,
 
     /* Process each hop independently */
     for (hop = 0; hop < path_len; hop++) {
-        lns_node_t *node = &net->nodes[path[hop]];
+        lns_node_t   *node = &net->nodes[path[hop]];
+        net_metrics_t eff_metrics;   /* congestion-aware effective metrics */
         pvm_handle_t *handle;
         decision_t d;
         int rc;
 
         printf("\n  [HOP %d/%d] Node \"%s\"\n", hop + 1, path_len, node->label);
+
+        /* Derive congestion-aware metrics from base + stress state.
+         * 10 ms is a nominal inter-hop elapsed time for simulation. */
+        eff_metrics = stress_update(&node->stress, len,
+                                    node->metrics.bandwidth_mbps, 10.0f,
+                                    node->metrics);
 
         /* Step 1: resolve intent into initial decision */
         d = resolve_intent(intent);
@@ -212,13 +220,13 @@ int network_forward(lns_network_t *net, int src_idx, int dst_idx,
         /* Step 2: incorporate learned decisions from neighbors */
         apply_neighbor_influence(&d, node);
 
-        /* Step 3: mutate based on this node's own observed metrics */
-        mutate(&d, node->metrics);
+        /* Step 3: mutate based on this node's congestion-adjusted metrics */
+        mutate(&d, eff_metrics);
         printf("  [HOP %d] Post-mutation ", hop + 1);
         decision_print(&d);
 
         /* Step 4: log decision for future propagation */
-        node_log_decision(node, d, node->metrics);
+        node_log_decision(node, d, eff_metrics);
 
         /* Step 5: execute via PVM */
         handle = pvm_load(d.use_udp ? "udp" : "tcp");
@@ -233,10 +241,10 @@ int network_forward(lns_network_t *net, int src_idx, int dst_idx,
         if (g_replay) {
             replay_record_hop(g_replay, node->label,
                               hop + 1, path_len,
-                              intent, node->metrics, d);
+                              intent, eff_metrics, d);
         }
         if (g_observer) {
-            observer_record_hop(g_observer, d.use_udp, node->metrics);
+            observer_record_hop(g_observer, d.use_udp, eff_metrics);
         }
 
         if (rc != 0) {

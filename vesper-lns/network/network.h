@@ -29,7 +29,8 @@ typedef struct {
 
 typedef struct {
     node_id_t         id;
-    net_metrics_t     metrics;
+    net_metrics_t     metrics;             /* base (configured) metrics      */
+    stress_state_t    stress;              /* mutable congestion/queue state */
     char              label[32];
     decision_packet_t decision_log[MAX_DECISION_LOG]; /* ring buffer */
     int               decision_log_count;             /* total logged so far */

@@ -1,6 +1,6 @@
 #include "mutation.h"
+#include "../rng/rng.h"
 #include <stdio.h>
-#include <stdlib.h>
 
 /* Thresholds that trigger adaptive mutations */
 #define LATENCY_HIGH_MS      150.0f
@@ -58,10 +58,9 @@ void mutate(decision_t *d, net_metrics_t metrics)
 net_metrics_t simulate_metrics(void)
 {
     net_metrics_t m;
-    /* Use fixed seeds to keep demo output deterministic */
-    m.latency_ms     = (float)(rand() % 300);          /* 0 to 299 ms  */
-    m.packet_loss    = (float)(rand() % 30) / 100.0f;  /* 0.00 to 0.29 */
-    m.bandwidth_mbps = (float)(rand() % 100) + 1.0f;   /* 1 to 100 Mbps */
+    m.latency_ms     = (float)rng_int_range(0, 299);         /* 0–299 ms  */
+    m.packet_loss    = (float)rng_int_range(0, 29) / 100.0f; /* 0.00–0.29 */
+    m.bandwidth_mbps = (float)rng_int_range(1, 100);          /* 1–100 Mbps */
     return m;
 }
 
@@ -140,4 +139,60 @@ void proto_config_print(const proto_config_t *cfg)
            "packet_size=%d bytes  cwnd=%d\n",
            cfg->window_size, cfg->retransmit_delay_ms,
            cfg->packet_size, cfg->congestion_window);
+}
+
+/* ---------------------------------------------------------------------------
+ * Backpressure / Network Stress Model
+ * ------------------------------------------------------------------------- */
+
+void stress_init(stress_state_t *s)
+{
+    if (!s) return;
+    s->queue_bytes = 0.0f;
+    s->jitter_ms   = 0.0f;
+}
+
+net_metrics_t stress_update(stress_state_t *s, size_t bytes_sent,
+                             float bw_mbps, float elapsed_ms,
+                             net_metrics_t base)
+{
+    net_metrics_t m = base;
+    float drain_bytes, saturation, jitter_target, loss_add;
+
+    if (!s) return m;
+
+    /* How many bytes the link drained in elapsed_ms */
+    drain_bytes     = (bw_mbps * 1.0e6f / 8.0f) * (elapsed_ms / 1000.0f);
+    s->queue_bytes += (float)bytes_sent - drain_bytes;
+    if (s->queue_bytes < 0.0f) s->queue_bytes = 0.0f;
+    if (s->queue_bytes > (float)STRESS_MAX_QUEUE_BYTES)
+        s->queue_bytes = (float)STRESS_MAX_QUEUE_BYTES;
+
+    /* Normalised saturation in [0, 1] */
+    saturation = s->queue_bytes / (float)STRESS_MAX_QUEUE_BYTES;
+
+    /* Jitter: exponential moving average towards congestion target */
+    jitter_target  = saturation * 50.0f;   /* up to +50 ms at full queue */
+    s->jitter_ms   = s->jitter_ms * 0.9f + jitter_target * 0.1f;
+
+    /* Apply congestion effects to metrics copy */
+    m.latency_ms  += s->jitter_ms;
+
+    loss_add       = saturation * 0.30f;   /* up to +30% loss at full queue */
+    m.packet_loss += loss_add;
+    if (m.packet_loss > 1.0f) m.packet_loss = 1.0f;
+
+    /* Effective bandwidth shrinks under queue saturation */
+    m.bandwidth_mbps = base.bandwidth_mbps * (1.0f - saturation * 0.8f);
+    if (m.bandwidth_mbps < 0.1f) m.bandwidth_mbps = 0.1f;
+
+    if (saturation > 0.01f) {
+        printf("[STRESS] queue=%.0f bytes  sat=%.1f%%  "
+               "jitter=%.1f ms  eff_bw=%.1f Mbps  eff_loss=%.1f%%\n",
+               s->queue_bytes, saturation * 100.0f,
+               s->jitter_ms,   m.bandwidth_mbps,
+               m.packet_loss * 100.0f);
+    }
+
+    return m;
 }
