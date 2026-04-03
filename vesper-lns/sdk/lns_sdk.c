@@ -194,3 +194,30 @@ int lns_semantic_compare(const lns_session_t          *session,
     if (!session) return -1;
     return semantic_compare_protocols(&session->replay, semantics, result_out);
 }
+
+/* ---------------------------------------------------------------------------
+ * Adversarial Protocol Synthesiser
+ * ------------------------------------------------------------------------- */
+
+int lns_synth_run(const synth_config_t *cfg, synth_result_t *result_out)
+{
+    return synth_run(cfg, result_out);
+}
+
+/* ---------------------------------------------------------------------------
+ * Formal Spec Compiler
+ * ------------------------------------------------------------------------- */
+
+int lns_spec_compile(intent_t           intent,
+                     intent_semantics_t semantics,
+                     spec_program_t    *program_out)
+{
+    return spec_compile(intent, semantics, program_out);
+}
+
+int lns_spec_check_session(const lns_session_t *session,
+                            spec_program_t      *program)
+{
+    if (!session) return 0;
+    return spec_check_session(program, &session->replay);
+}

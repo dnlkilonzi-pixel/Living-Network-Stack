@@ -35,6 +35,8 @@
 #include "../network/network.h"
 #include "../bus/bus.h"
 #include "../semantic/semantic.h"
+#include "../synth/synth.h"
+#include "../spec_compiler/spec_compiler.h"
 #include <stdio.h>
 #include <stddef.h>
 
@@ -134,5 +136,37 @@ int lns_semantic_verify(const lns_session_t       *session,
 int lns_semantic_compare(const lns_session_t          *session,
                           const intent_semantics_t     *semantics,
                           semantic_comparison_result_t *result_out);
+
+/* ---------------------------------------------------------------------------
+ * Adversarial Protocol Synthesiser
+ * ------------------------------------------------------------------------- */
+
+/*
+ * Run the adversarial synthesis loop with the given configuration.
+ * Evolves proto_config_t parameters under stress to best satisfy the
+ * declared intent_semantics_t constraints.
+ * Returns 0 on success, -1 on bad arguments.
+ */
+int lns_synth_run(const synth_config_t *cfg, synth_result_t *result_out);
+
+/* ---------------------------------------------------------------------------
+ * Formal Spec Compiler
+ * ------------------------------------------------------------------------- */
+
+/*
+ * Compile an (intent, semantics) pair into a runnable spec_program_t.
+ * Returns the number of constraints compiled, or -1 on error.
+ */
+int lns_spec_compile(intent_t           intent,
+                     intent_semantics_t semantics,
+                     spec_program_t    *program_out);
+
+/*
+ * Sweep the compiled spec program over the session's replay log.
+ * Returns the total number of hops that violated at least one constraint.
+ * Violation counters inside program are accumulated (not reset).
+ */
+int lns_spec_check_session(const lns_session_t *session,
+                            spec_program_t      *program);
 
 #endif /* LNS_SDK_H */
