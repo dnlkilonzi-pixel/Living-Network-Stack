@@ -34,6 +34,7 @@
 #include "../replay/replay.h"
 #include "../network/network.h"
 #include "../bus/bus.h"
+#include "../semantic/semantic.h"
 #include <stdio.h>
 #include <stddef.h>
 
@@ -114,5 +115,24 @@ void lns_replay_verify(const lns_session_t *session);
 /* Write the trace as NDJSON to path (one JSON object per line).
  * Returns 0 on success, -1 on I/O failure. */
 int lns_replay_save(const lns_session_t *session, const char *path);
+
+/* ---------------------------------------------------------------------------
+ * Semantic Protocol Reasoning Layer
+ * ------------------------------------------------------------------------- */
+
+/* Verify that every hop in the session's replay log satisfied the declared
+ * intent semantics.  Violations are written into violations_out[].
+ * Returns the total violation count (may exceed max_count if truncated). */
+int lns_semantic_verify(const lns_session_t       *session,
+                         const intent_semantics_t  *semantics,
+                         semantic_violation_t      *violations_out,
+                         int                        max_count);
+
+/* Compare TCP vs UDP outcomes in the replay log against the declared
+ * semantics and objective.  Fills result_out and returns 0 on success,
+ * -1 if the session has no events. */
+int lns_semantic_compare(const lns_session_t          *session,
+                          const intent_semantics_t     *semantics,
+                          semantic_comparison_result_t *result_out);
 
 #endif /* LNS_SDK_H */

@@ -32,4 +32,38 @@ void intent_print(intent_t intent);
 /* Pretty-print a decision */
 void decision_print(const decision_t *d);
 
+/* ---------------------------------------------------------------------------
+ * Semantic intent declarations
+ *
+ * These structures extend the basic intent_t with formal guarantees and
+ * constraints that the chosen protocol MUST satisfy.  They feed into the
+ * Semantic Protocol Reasoning Layer (semantic/semantic.h), which verifies
+ * observed outcomes against declared semantics after each session.
+ * ------------------------------------------------------------------------- */
+
+/* Delivery guarantee that must be honoured */
+typedef enum {
+    GUARANTEE_BEST_EFFORT   = 0, /* no delivery assurance (fire-and-forget)  */
+    GUARANTEE_AT_LEAST_ONCE = 1, /* must not drop; duplicates tolerated       */
+    GUARANTEE_EXACTLY_ONCE  = 2  /* no drops AND no duplicates (TCP-grade)    */
+} delivery_guarantee_t;
+
+/* Optimisation objective for the session */
+typedef enum {
+    OBJECTIVE_NONE                = 0, /* no preference                       */
+    OBJECTIVE_MINIMIZE_LATENCY    = 1, /* prefer lowest observed latency      */
+    OBJECTIVE_MINIMIZE_LOSS       = 2, /* prefer lowest packet-loss path      */
+    OBJECTIVE_MAXIMIZE_THROUGHPUT = 3  /* prefer highest effective bandwidth  */
+} opt_objective_t;
+
+/* Semantic constraints attached to an intent.
+ * Combine with a plain intent_t to give the semantic reasoning layer
+ * enough information to verify and compare protocol choices. */
+typedef struct {
+    delivery_guarantee_t guarantee;      /* required delivery guarantee       */
+    float                max_latency_ms; /* latency budget; 0 = unconstrained */
+    float                max_loss;       /* loss budget [0,1]; 0 = unconstrained */
+    opt_objective_t      objective;      /* what to optimise for              */
+} intent_semantics_t;
+
 #endif /* INTENT_H */

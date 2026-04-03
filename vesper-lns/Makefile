@@ -9,7 +9,8 @@ CC      := gcc
 CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -g \
            -Icore -Iintent_engine -Ipvm -Imutation_engine \
            -Iidentity_layer -Iexecution_engine -Itransport \
-           -Inetwork -Itrust_layer -Ireplay -Iobserver -Ibus -Isdk -Irng
+           -Inetwork -Itrust_layer -Ireplay -Iobserver -Ibus -Isdk -Irng \
+           -Isemantic
 
 TARGET  := lns_demo
 LIB     := liblns.a
@@ -28,6 +29,7 @@ SRCS := core/lns.c \
         observer/observer.c \
         bus/bus.c \
         rng/rng.c \
+        semantic/semantic.c \
         demo/main.c
 
 # Library sources: all modules except demo/ and sdk/examples/
@@ -45,6 +47,7 @@ LIB_SRCS := core/lns.c \
             observer/observer.c \
             bus/bus.c \
             rng/rng.c \
+            semantic/semantic.c \
             sdk/lns_sdk.c
 
 LIB_OBJS := $(LIB_SRCS:.c=.o)

@@ -172,3 +172,25 @@ int lns_replay_save(const lns_session_t *session, const char *path)
     if (!session || !path) return -1;
     return replay_dump_file(&session->replay, path);
 }
+
+/* ---------------------------------------------------------------------------
+ * Semantic Protocol Reasoning Layer
+ * ------------------------------------------------------------------------- */
+
+int lns_semantic_verify(const lns_session_t      *session,
+                         const intent_semantics_t *semantics,
+                         semantic_violation_t     *violations_out,
+                         int                       max_count)
+{
+    if (!session) return 0;
+    return semantic_verify_session(&session->replay, semantics,
+                                   violations_out, max_count);
+}
+
+int lns_semantic_compare(const lns_session_t          *session,
+                          const intent_semantics_t     *semantics,
+                          semantic_comparison_result_t *result_out)
+{
+    if (!session) return -1;
+    return semantic_compare_protocols(&session->replay, semantics, result_out);
+}
