@@ -20,4 +20,26 @@ net_metrics_t simulate_metrics(void);
 /* Pretty-print a metrics snapshot */
 void metrics_print(net_metrics_t m);
 
+/* ---------------------------------------------------------------------------
+ * Protocol Configuration – live-evolvable transport parameters
+ * ------------------------------------------------------------------------- */
+
+typedef struct {
+    int window_size;          /* bytes: TCP receive window / UDP batch size */
+    int retransmit_delay_ms;  /* milliseconds between retransmissions */
+    int packet_size;          /* target segment / datagram size in bytes */
+    int congestion_window;    /* multiplicative congestion factor */
+} proto_config_t;
+
+/* Create a protocol configuration pre-loaded with sensible defaults */
+proto_config_t proto_config_default(void);
+
+/* Evolve protocol parameters in-place based on observed network metrics.
+ * Unlike mutate() which switches protocols, this evolves the parameters
+ * of the currently selected protocol dynamically. */
+void mutate_proto_config(proto_config_t *cfg, net_metrics_t metrics);
+
+/* Pretty-print a proto_config_t */
+void proto_config_print(const proto_config_t *cfg);
+
 #endif /* MUTATION_H */

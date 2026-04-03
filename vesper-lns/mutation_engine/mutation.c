@@ -70,3 +70,74 @@ void metrics_print(net_metrics_t m)
     printf("[METRICS] latency=%.1f ms  loss=%.1f%%  bandwidth=%.1f Mbps\n",
            m.latency_ms, m.packet_loss * 100.0f, m.bandwidth_mbps);
 }
+
+/* ---------------------------------------------------------------------------
+ * Protocol Configuration Mutation
+ * ------------------------------------------------------------------------- */
+
+proto_config_t proto_config_default(void)
+{
+    proto_config_t cfg;
+    cfg.window_size         = 65536;  /* 64 KB default receive window */
+    cfg.retransmit_delay_ms = 200;    /* 200 ms initial RTO */
+    cfg.packet_size         = 1400;   /* ~Ethernet MTU with overhead */
+    cfg.congestion_window   = 1;      /* start slow */
+    return cfg;
+}
+
+void mutate_proto_config(proto_config_t *cfg, net_metrics_t metrics)
+{
+    printf("[MUTATION] Evolving proto_config: window=%d  rto=%d ms  "
+           "pkt_size=%d  cwnd=%d\n",
+           cfg->window_size, cfg->retransmit_delay_ms,
+           cfg->packet_size, cfg->congestion_window);
+
+    if (metrics.latency_ms > LATENCY_HIGH_MS) {
+        /* High RTT: shrink packets to avoid fragmentation and timeouts */
+        cfg->packet_size -= 128;
+        if (cfg->packet_size < 256) cfg->packet_size = 256;
+
+        /* Backoff retransmit timer proportional to observed RTT */
+        cfg->retransmit_delay_ms += (int)(metrics.latency_ms * 1.5f);
+
+        printf("[MUTATION] High RTT (%.1f ms) -> "
+               "packet_size=%d  rto=%d ms\n",
+               metrics.latency_ms,
+               cfg->packet_size, cfg->retransmit_delay_ms);
+    }
+
+    if (metrics.packet_loss > PACKET_LOSS_HIGH) {
+        /* Congestion-style loss: halve cwnd and shrink segments */
+        cfg->congestion_window = cfg->congestion_window > 1
+                               ? cfg->congestion_window / 2 : 1;
+        cfg->packet_size -= 64;
+        if (cfg->packet_size < 256) cfg->packet_size = 256;
+
+        printf("[MUTATION] Packet loss %.1f%% -> "
+               "cwnd=%d  packet_size=%d\n",
+               metrics.packet_loss * 100.0f,
+               cfg->congestion_window, cfg->packet_size);
+    }
+
+    if (metrics.bandwidth_mbps > 50.0f) {
+        /* High bandwidth: grow window aggressively and use larger frames */
+        if (cfg->window_size < 262144)
+            cfg->window_size *= 2;
+        if (cfg->packet_size < 9000)
+            cfg->packet_size = 9000;   /* jumbo frames */
+        cfg->congestion_window++;
+
+        printf("[MUTATION] High BW (%.1f Mbps) -> "
+               "window=%d  packet_size=%d  cwnd=%d\n",
+               metrics.bandwidth_mbps,
+               cfg->window_size, cfg->packet_size, cfg->congestion_window);
+    }
+}
+
+void proto_config_print(const proto_config_t *cfg)
+{
+    printf("[PROTO_CFG] window=%d bytes  rto=%d ms  "
+           "packet_size=%d bytes  cwnd=%d\n",
+           cfg->window_size, cfg->retransmit_delay_ms,
+           cfg->packet_size, cfg->congestion_window);
+}
