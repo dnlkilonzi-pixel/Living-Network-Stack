@@ -182,12 +182,17 @@ int semantic_compare_protocols(const replay_log_t          *log,
         p->objective_score = compute_score(p, semantics->objective);
     }
 
-    /* Determine winner */
+    /* Determine winner: strict greater-than so equal scores are a tie */
     if (result->entries[0].hop_count > 0 &&
         result->entries[1].hop_count > 0) {
-        result->winner_idx =
-            (result->entries[0].objective_score >=
-             result->entries[1].objective_score) ? 0 : 1;
+        if (result->entries[0].objective_score >
+            result->entries[1].objective_score) {
+            result->winner_idx = 0;
+        } else if (result->entries[1].objective_score >
+                   result->entries[0].objective_score) {
+            result->winner_idx = 1;
+        }
+        /* else: equal scores — winner_idx stays -1 (tie) */
     } else if (result->entries[0].hop_count > 0) {
         result->winner_idx = 0;
     } else if (result->entries[1].hop_count > 0) {
