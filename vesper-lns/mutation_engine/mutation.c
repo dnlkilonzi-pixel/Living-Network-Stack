@@ -59,9 +59,9 @@ net_metrics_t simulate_metrics(void)
 {
     net_metrics_t m;
     /* Use fixed seeds to keep demo output deterministic */
-    m.latency_ms     = (float)(rand() % 300);          /* 0 .. 299 ms */
-    m.packet_loss    = (float)(rand() % 30) / 100.0f;  /* 0 .. 0.29  */
-    m.bandwidth_mbps = (float)(rand() % 100) + 1.0f;   /* 1 .. 100 Mbps */
+    m.latency_ms     = (float)(rand() % 300);          /* 0 to 299 ms  */
+    m.packet_loss    = (float)(rand() % 30) / 100.0f;  /* 0.00 to 0.29 */
+    m.bandwidth_mbps = (float)(rand() % 100) + 1.0f;   /* 1 to 100 Mbps */
     return m;
 }
 
