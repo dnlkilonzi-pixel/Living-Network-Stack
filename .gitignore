@@ -1,0 +1,3 @@
+# Build artifacts
+vesper-lns/lns_demo
+vesper-lns/**/*.o
