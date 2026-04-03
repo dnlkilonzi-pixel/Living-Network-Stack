@@ -103,8 +103,12 @@ int spec_compile(intent_t           intent,
     }
 
     if (semantics.guarantee >= GUARANTEE_AT_LEAST_ONCE) {
-        const char *gname = (semantics.guarantee == GUARANTEE_EXACTLY_ONCE)
-                            ? "EXACTLY_ONCE" : "AT_LEAST_ONCE";
+        const char *gname;
+        switch (semantics.guarantee) {
+        case GUARANTEE_EXACTLY_ONCE:  gname = "EXACTLY_ONCE";  break;
+        case GUARANTEE_AT_LEAST_ONCE: gname = "AT_LEAST_ONCE"; break;
+        default:                      gname = "AT_LEAST_ONCE"; break;
+        }
         snprintf(buf, sizeof(buf),
                  "use_udp == 0  [delivery guarantee: %s]", gname);
         emit(out, "delivery_guarantee_tcp",

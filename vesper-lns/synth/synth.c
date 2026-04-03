@@ -3,6 +3,9 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Minimum retransmit delay used as divisor to avoid division-by-zero */
+#define SYNTH_MIN_RETRANSMIT_MS  1
+
 /* ---------------------------------------------------------------------------
  * Internal: predict effective metrics without any I/O
  *
@@ -19,7 +22,8 @@ static net_metrics_t predict_metrics(const proto_config_t *cfg,
     float queue, saturation, jitter, drain, loss_add;
     size_t bytes;
     float elapsed_ms = (float)(cfg->retransmit_delay_ms > 0
-                                ? cfg->retransmit_delay_ms : 1);
+                                ? cfg->retransmit_delay_ms
+                                : SYNTH_MIN_RETRANSMIT_MS);
     float bw_mbps = base.bandwidth_mbps > 0.0f ? base.bandwidth_mbps : 1.0f;
 
     bytes = (bytes_per_pkt > 0)
@@ -106,7 +110,8 @@ static float score_candidate(const proto_config_t     *cfg,
     if (sem->guarantee >= GUARANTEE_AT_LEAST_ONCE) {
         /* Faster retransmission improves delivery reliability */
         score += 100.0f / (float)(cfg->retransmit_delay_ms > 0
-                                  ? cfg->retransmit_delay_ms : 1);
+                                  ? cfg->retransmit_delay_ms
+                                  : SYNTH_MIN_RETRANSMIT_MS);
     }
 
     return (score < 0.0f) ? 0.0f : score;
