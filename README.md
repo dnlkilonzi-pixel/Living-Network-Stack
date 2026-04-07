@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1>🌐 Living Network Stack</h1>
+<h1> Living Network Stack</h1>
 
 <p><em>A self-evolving, intent-driven programmable network runtime written in C99</em></p>
 
@@ -45,7 +45,7 @@ The **Living Network Stack (LNS)** is a research-grade, fully in-C99 programmabl
 │    intent_semantics_t { guarantee, max_latency_ms, max_loss, objective } │
 └─────────────────────────────┬────────────────────────────────────────────┘
                               │  lns_forward()
-                              ▼
+                              
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  Living Network Stack Runtime                                            │
 │  ┌──────────┐  ┌────────────┐  ┌──────┐  ┌────────────┐  ┌──────────┐  │
@@ -66,19 +66,19 @@ The **Living Network Stack (LNS)** is a research-grade, fully in-C99 programmabl
 
 | Capability | Description |
 |---|---|
-| 🎯 **Intent-Driven Routing** | Resolve `LOW_LATENCY`, `HIGH_SECURITY`, `HIGH_THROUGHPUT` flags into UDP/TCP decisions automatically |
-| 🔄 **Adaptive Mutation** | Protocol decisions mutate in-place based on observed latency, loss, and bandwidth |
-| 🧬 **Protocol Config Evolution** | `proto_config_t` parameters (window, RTO, cwnd, packet size) evolve under live conditions |
-| 💀 **Backpressure / Stress Model** | Accurate queue-depth model raises latency and loss proportionally to congestion |
-| 🔌 **Protocol Virtual Machine** | Hot-swap protocol implementations at runtime via vtable registry (PVM) |
-| 📼 **Deterministic Replay** | Every hop recorded; re-execution from seed proves bit-identical determinism |
-| 🔍 **Observer + Query Language** | Real-time dashboard + predicate-based query engine over the replay log |
-| 🚌 **Real IPC Message Bus** | UNIX `socketpair` binary-serialized message bus for inter-node communication |
-| 🔐 **Trust & Capability Routing** | Per-node trust scores gate capability access during routing decisions |
-| ⏱️ **Vector Clocks** | Causal ordering of all events across distributed nodes |
-| ✅ **Semantic Verification** | Check every hop against declared delivery guarantees, latency budgets, and loss budgets |
-| ⚔️ **Adversarial Synthesis** | Hillclimber evolves `proto_config_t` under hostile stress to satisfy semantic constraints |
-| 📜 **Formal Spec Compiler** | Compile `intent_t + intent_semantics_t` into an executable constraint program with runtime assertions |
+|  **Intent-Driven Routing** | Resolve `LOW_LATENCY`, `HIGH_SECURITY`, `HIGH_THROUGHPUT` flags into UDP/TCP decisions automatically |
+|  **Adaptive Mutation** | Protocol decisions mutate in-place based on observed latency, loss, and bandwidth |
+|  **Protocol Config Evolution** | `proto_config_t` parameters (window, RTO, cwnd, packet size) evolve under live conditions |
+|  **Backpressure / Stress Model** | Accurate queue-depth model raises latency and loss proportionally to congestion |
+|  **Protocol Virtual Machine** | Hot-swap protocol implementations at runtime via vtable registry (PVM) |
+|  **Deterministic Replay** | Every hop recorded; re-execution from seed proves bit-identical determinism |
+|  **Observer + Query Language** | Real-time dashboard + predicate-based query engine over the replay log |
+|  **Real IPC Message Bus** | UNIX `socketpair` binary-serialized message bus for inter-node communication |
+|  **Trust & Capability Routing** | Per-node trust scores gate capability access during routing decisions |
+|  **Vector Clocks** | Causal ordering of all events across distributed nodes |
+|  **Semantic Verification** | Check every hop against declared delivery guarantees, latency budgets, and loss budgets |
+|  **Adversarial Synthesis** | Hillclimber evolves `proto_config_t` under hostile stress to satisfy semantic constraints |
+|  **Formal Spec Compiler** | Compile `intent_t + intent_semantics_t` into an executable constraint program with runtime assertions |
 
 ---
 
@@ -178,7 +178,7 @@ Centralized xorshift64 PRNG (`rng/`) for bit-identical determinism, `stress_stat
 
 ### Phase 7 — Adversarial Synthesis & Formal Spec Compilation *(current)*
 
-#### ⚔️ Adversarial Protocol Synthesiser (`synth/`)
+####  Adversarial Protocol Synthesiser (`synth/`)
 A fixed-population hillclimber that evolves `proto_config_t` parameters under **adversarial** (worst-case) stress conditions to discover the configuration that best satisfies the declared `intent_semantics_t` constraints.
 
 - **8 mutants per generation**, each field perturbed ±15–30%
@@ -215,7 +215,7 @@ synth_print_result(&result);
 ============================================================
 ```
 
-#### 📜 Formal Spec Compiler (`spec_compiler/`)
+####  Formal Spec Compiler (`spec_compiler/`)
 Compiles an `(intent_t, intent_semantics_t)` pair into a runnable `spec_program_t` — a flat array of typed constraint rules that make intent declarations **executable** at runtime.
 
 | Source | Compiled Rule |
